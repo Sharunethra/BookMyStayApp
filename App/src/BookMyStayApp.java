@@ -1,114 +1,98 @@
 import java.util.*;
-public class BookMyStayApp {
-
-
-    static class InvalidBookingException extends Exception {
-        public InvalidBookingException(String message) {
-            super(message);
-        }
-    }
-
-
-    static class RoomInventory {
+static class RoomInventory {
         private Map<String, Integer> rooms;
 
         public RoomInventory() {
             rooms = new HashMap<>();
-            rooms.put("Single", 2);
-            rooms.put("Double", 2);
-            rooms.put("Suite", 1);
+            rooms.put("Single", 5);
+            rooms.put("Double", 3);
+            rooms.put("Suite", 2);
         }
 
-        public boolean isAvailable(String roomType) {
-            return rooms.getOrDefault(roomType, 0) > 0;
+        public void increaseRoom(String roomType) {
+            rooms.put(roomType, rooms.getOrDefault(roomType, 0) + 1);
         }
 
-        public void bookRoom(String roomType) throws InvalidBookingException {
-            int count = rooms.get(roomType);
-
-            if (count <= 0) {
-                throw new InvalidBookingException("No rooms available.");
-            }
-
-            rooms.put(roomType, count - 1);
+        public int getAvailability(String roomType) {
+            return rooms.getOrDefault(roomType, 0);
         }
     }
 
 
-    static class ReservationValidator {
+    static class CancellationService {
 
-        public void validate(String guestName,
-                             String roomType,
-                             RoomInventory inventory)
-                throws InvalidBookingException {
+        private Stack<String> releasedRoomIds;
 
-            if (guestName == null || guestName.trim().isEmpty()) {
-                throw new InvalidBookingException("Guest name cannot be empty.");
+        // Reservation ID -> Room Type mapping
+        private Map<String, String> reservationRoomMap;
+
+        public CancellationService() {
+            releasedRoomIds = new Stack<>();
+            reservationRoomMap = new HashMap<>();
+        }
+
+        // Register confirmed booking
+        public void registerBooking(String reservationId, String roomType) {
+            reservationRoomMap.put(reservationId, roomType);
+        }
+
+        // Cancel booking and rollback
+        public void cancelBooking(String reservationId, RoomInventory inventory) {
+
+            // Validate existence
+            if (!reservationRoomMap.containsKey(reservationId)) {
+                System.out.println("Cancellation failed: Invalid reservation ID.");
+                return;
             }
 
-            if (!roomType.equals("Single") &&
-                    !roomType.equals("Double") &&
-                    !roomType.equals("Suite")) {
+            String roomType = reservationRoomMap.get(reservationId);
 
-                throw new InvalidBookingException("Invalid room type selected.");
+            // Push to stack (rollback history)
+            releasedRoomIds.push(reservationId);
+
+            // Restore inventory
+            inventory.increaseRoom(roomType);
+
+            // Remove booking record
+            reservationRoomMap.remove(reservationId);
+
+            System.out.println("Booking cancelled successfully. Inventory restored for room type: " + roomType);
+        }
+
+        // Show rollback history
+        public void showRollbackHistory() {
+            System.out.println("\nRollback History (Most Recent First):");
+
+            if (releasedRoomIds.isEmpty()) {
+                System.out.println("No cancellations yet.");
+                return;
             }
 
-            if (!inventory.isAvailable(roomType)) {
-                throw new InvalidBookingException("Selected room not available.");
+            for (int i = releasedRoomIds.size() - 1; i >= 0; i--) {
+                System.out.println("Released Reservation ID: " + releasedRoomIds.get(i));
             }
         }
     }
 
-
-    static class BookingRequestQueue {
-        private Queue<String> queue = new LinkedList<>();
-
-        public void addRequest(String request) {
-            queue.add(request);
-        }
-
-        public void processRequests() {
-            while (!queue.isEmpty()) {
-                System.out.println("Processing: " + queue.poll());
-            }
-        }
-    }
-
-
+    // ================= MAIN METHOD =================
     public static void main(String[] args) {
 
-        System.out.println("Booking Validation");
-
-        Scanner scanner = new Scanner(System.in);
+        System.out.println("Booking Cancellation");
 
         RoomInventory inventory = new RoomInventory();
-        ReservationValidator validator = new ReservationValidator();
-        BookingRequestQueue bookingQueue = new BookingRequestQueue();
+        CancellationService service = new CancellationService();
 
-        try {
+        // Simulate confirmed booking
+        String reservationId = "Single-1";
+        service.registerBooking(reservationId, "Single");
 
-            System.out.print("Enter guest name: ");
-            String guestName = scanner.nextLine();
+        // Perform cancellation
+        service.cancelBooking(reservationId, inventory);
 
-            System.out.print("Enter room type (Single/Double/Suite): ");
-            String roomType = scanner.nextLine();
+        // Show rollback history
+        service.showRollbackHistory();
 
-
-            validator.validate(guestName, roomType, inventory);
-
-
-            inventory.bookRoom(roomType);
-
-
-            bookingQueue.addRequest(guestName + " booked " + roomType);
-            bookingQueue.processRequests();
-
-            System.out.println("Booking successful!");
-
-        } catch (InvalidBookingException e) {
-            System.out.println("Booking failed: " + e.getMessage());
-        } finally {
-            scanner.close();
-        }
+        // Show updated inventory
+        System.out.println("\nUpdated Single Room Availability: "
+                + inventory.getAvailability("Single"));
     }
-}
